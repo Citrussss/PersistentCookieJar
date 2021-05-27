@@ -34,14 +34,15 @@ public class PersistentCookieJar implements ClearableCookieJar {
     public PersistentCookieJar(CookieCache cache, CookiePersistor persistor) {
         this.cache = cache;
         this.persistor = persistor;
-
         this.cache.addAll(persistor.loadAll());
     }
 
     @Override
-    synchronized public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
-        cache.addAll(cookies);
-        persistor.saveAll(filterPersistentCookies(cookies));
+    public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
+        synchronized (this) {
+            cache.addAll(cookies);
+            persistor.saveAll(filterPersistentCookies(cookies));
+        }
     }
 
     private static List<Cookie> filterPersistentCookies(List<Cookie> cookies) {
@@ -59,21 +60,20 @@ public class PersistentCookieJar implements ClearableCookieJar {
     synchronized public List<Cookie> loadForRequest(HttpUrl url) {
         List<Cookie> cookiesToRemove = new ArrayList<>();
         List<Cookie> validCookies = new ArrayList<>();
+        synchronized (this) {
+            for (Iterator<Cookie> it = cache.iterator(); it.hasNext(); ) {
+                Cookie currentCookie = it.next();
 
-        for (Iterator<Cookie> it = cache.iterator(); it.hasNext(); ) {
-            Cookie currentCookie = it.next();
+                if (isCookieExpired(currentCookie)) {
+                    cookiesToRemove.add(currentCookie);
+                    it.remove();
 
-            if (isCookieExpired(currentCookie)) {
-                cookiesToRemove.add(currentCookie);
-                it.remove();
-
-            } else if (currentCookie.matches(url)) {
-                validCookies.add(currentCookie);
+                } else if (currentCookie.matches(url)) {
+                    validCookies.add(currentCookie);
+                }
             }
+            persistor.removeAll(cookiesToRemove);
         }
-
-        persistor.removeAll(cookiesToRemove);
-
         return validCookies;
     }
 
@@ -82,14 +82,18 @@ public class PersistentCookieJar implements ClearableCookieJar {
     }
 
     @Override
-    synchronized public void clearSession() {
-        cache.clear();
-        cache.addAll(persistor.loadAll());
+    public void clearSession() {
+        synchronized (this) {
+            cache.clear();
+            cache.addAll(persistor.loadAll());
+        }
     }
 
     @Override
-    synchronized public void clear() {
-        cache.clear();
-        persistor.clear();
+    public void clear() {
+        synchronized (this) {
+            cache.clear();
+            persistor.clear();
+        }
     }
 }
