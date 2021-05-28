@@ -28,8 +28,8 @@ import okhttp3.HttpUrl;
 
 public class PersistentCookieJar implements ClearableCookieJar {
 
-    private CookieCache cache;
-    private CookiePersistor persistor;
+    private final CookieCache cache;
+    private final CookiePersistor persistor;
 
     public PersistentCookieJar(CookieCache cache, CookiePersistor persistor) {
         this.cache = cache;
@@ -39,7 +39,7 @@ public class PersistentCookieJar implements ClearableCookieJar {
 
     @Override
     public void saveFromResponse(HttpUrl url, List<Cookie> cookies) {
-        synchronized (this) {
+        synchronized (cache) {
             cache.addAll(cookies);
             persistor.saveAll(filterPersistentCookies(cookies));
         }
@@ -57,10 +57,10 @@ public class PersistentCookieJar implements ClearableCookieJar {
     }
 
     @Override
-    synchronized public List<Cookie> loadForRequest(HttpUrl url) {
+    public List<Cookie> loadForRequest(HttpUrl url) {
         List<Cookie> cookiesToRemove = new ArrayList<>();
         List<Cookie> validCookies = new ArrayList<>();
-        synchronized (this) {
+        synchronized (cache) {
             for (Iterator<Cookie> it = cache.iterator(); it.hasNext(); ) {
                 Cookie currentCookie = it.next();
 
@@ -83,7 +83,7 @@ public class PersistentCookieJar implements ClearableCookieJar {
 
     @Override
     public void clearSession() {
-        synchronized (this) {
+        synchronized (cache) {
             cache.clear();
             cache.addAll(persistor.loadAll());
         }
@@ -91,7 +91,7 @@ public class PersistentCookieJar implements ClearableCookieJar {
 
     @Override
     public void clear() {
-        synchronized (this) {
+        synchronized (cache) {
             cache.clear();
             persistor.clear();
         }
